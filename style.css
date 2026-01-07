@@ -1,0 +1,107 @@
+:root {
+  --gold: #d4af37;
+  --gold-soft: #e6c96b;
+  --dark: #0b0a09;
+  --card-bg: rgba(15, 10, 10, 0.8);
+  --border: rgba(212, 175, 55, 0.35);
+  --text: #f5f1e8;
+}
+
+body {
+  margin: 0;
+  padding: 30px;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+  background-image: url("background-image.jpg");
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: -1;
+}
+
+h1 {
+  text-align: center;
+  color: var(--gold);
+  font-size: 3rem;
+  letter-spacing: 3px;
+  text-shadow: 0 0 20px rgba(212,175,55,0.6);
+}
+
+.card {
+  background: var(--card-bg);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 25px;
+  box-shadow: 0 15px 40px rgba(0,0,0,0.7);
+}
+
+.card h2 {
+  color: var(--gold-soft);
+  margin-top: 0;
+}
+
+input, select {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 10px;
+  background: #120e0d;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+}
+
+button {
+  background: linear-gradient(145deg, #d4af37, #8f6b1e);
+  color: #1a1305;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+  transition: all 0.2s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(212,175,55,0.8);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  color: var(--gold);
+}
+
+tr:hover {
+  background: rgba(212,175,55,0.08);
+}
+
+.result {
+  margin-top: 15px;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(212,175,55,0.15);
+  border: 1px solid var(--border);
+  text-align: center;
+  color: var(--gold-soft);
+  font-weight: bold;
+}

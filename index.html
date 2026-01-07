@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hellcats MVP</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<h1>HELLCATS MVP</h1>
+
+<div class="card">
+  <h2>Add Person</h2>
+  <input id="newName" placeholder="Enter name">
+  <button onclick="addPerson()">Add</button>
+</div>
+
+<div class="card">
+  <h2>MVP Settings</h2>
+  <label>MVP Cooldown</label>
+  <input
+    id="cooldownInput"
+    type="number"
+    min="0"
+    onchange="setCooldown(this.value)"
+  >
+</div>
+
+<div class="card">
+  <h2>Persons</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>MVPs</th>
+        <th>Ø Place</th>
+        <th>Cooldown</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="persons"></tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>New Event – Top 10</h2>
+  <div id="top10"></div>
+  <button onclick="saveEvent()">Save Event</button>
+</div>
+
+<div class="card">
+  <h2>Next MVP</h2>
+  <button onclick="calculateMVP()">Calculate MVP</button>
+  <div id="mvpResult" class="result"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
