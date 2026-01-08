@@ -1,11 +1,12 @@
-console.log("APP.JS VERSION", "v1-2026-01-08")
+console.log("APP.JS VERSION", "v1-2026-01-08");
 
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+// Firebase via CDN (funktioniert auf GitHub Pages)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyAjWpYMV0xKUVqD2MdhmHdsv-CONgZ8iDM",
   authDomain: "zabini-mvp.firebaseapp.com",
@@ -15,9 +16,20 @@ const firebaseConfig = {
   appId: "1:757946103220:web:d56c1371db8c84aac7eee1"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
+await signInAnonymously(auth);
+
+// Firestore-Doc für deinen Zustand
+const stateRef = doc(db, "state", "main");
+
+// falls state/main noch nicht existiert: anlegen
+const snap = await getDoc(stateRef);
+if (!snap.exists()) {
+  await setDoc(stateRef, { persons: [], events: [], mvpCooldown: 1 });
+}
 
 
 let persons = JSON.parse(localStorage.getItem("persons")) || [];
