@@ -1,3 +1,23 @@
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyAjWpYMV0xKUVqD2MdhmHdsv-CONgZ8iDM",
+  authDomain: "zabini-mvp.firebaseapp.com",
+  projectId: "zabini-mvp",
+  storageBucket: "zabini-mvp.firebasestorage.app",
+  messagingSenderId: "757946103220",
+  appId: "1:757946103220:web:d56c1371db8c84aac7eee1"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+
+
+
 let persons = JSON.parse(localStorage.getItem("persons")) || [];
 let events = JSON.parse(localStorage.getItem("events")) || [];
 let mvpCooldown = JSON.parse(localStorage.getItem("mvpCooldown")) || 1;
