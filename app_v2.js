@@ -1,4 +1,4 @@
-console.log("APP.JS VERSION", "v4-backup-restore");
+console.log("APP.JS VERSION", "v5-admin-mode");
 
 // Firebase via CDN (GitHub Pages kompatibel)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
@@ -31,10 +31,21 @@ const appRoot = document.getElementById("appRoot");
 // UI: Status Bar
 const connStatus = document.getElementById("connStatus");
 const saveStatus = document.getElementById("saveStatus");
+const adminBadge = document.getElementById("adminBadge");
 
-// UI: Import label / file
+// UI: Import
 const importFile = document.getElementById("importFile");
 const importLabel = document.getElementById("importLabel");
+const importBtn = document.getElementById("importBtn");
+const resetBtn = document.getElementById("resetBtn");
+
+// UI: Admin overlay
+const adminOverlay = document.getElementById("adminOverlay");
+const adminForm = document.getElementById("adminForm");
+const adminPasswordInput = document.getElementById("adminPasswordInput");
+const adminStatus = document.getElementById("adminStatus");
+const adminUnlockBtn = document.getElementById("adminUnlockBtn");
+const adminLockBtn = document.getElementById("adminLockBtn");
 
 function setLoginStatus(msg) {
   if (loginStatus) loginStatus.textContent = msg;
@@ -54,6 +65,10 @@ function setSaving(msg) {
   saveStatus.textContent = msg || "";
 }
 
+function setAdminStatus(msg) {
+  if (adminStatus) adminStatus.textContent = msg || "";
+}
+
 // Online/Offline events
 window.addEventListener("online", () => setConn("🟢 Online"));
 window.addEventListener("offline", () => setConn("🔴 Offline"));
@@ -68,6 +83,20 @@ let events = [];
 let mvpCooldown = 1;
 
 const TITLE_PENALTY = 15;
+
+// Admin session flag (nur im Browser, kein Firestore)
+let isAdmin = sessionStorage.getItem("isAdmin") === "1";
+
+function applyAdminUi() {
+  if (adminBadge) adminBadge.textContent = isAdmin ? "🛡 Admin" : "";
+  if (importBtn) importBtn.disabled = !isAdmin;
+  if (resetBtn) resetBtn.disabled = !isAdmin;
+
+  if (adminUnlockBtn) adminUnlockBtn.style.display = isAdmin ? "none" : "inline-block";
+  if (adminLockBtn) adminLockBtn.style.display = isAdmin ? "inline-block" : "none";
+}
+
+applyAdminUi();
 
 // Hash helper
 async function sha256Hex(str) {
@@ -93,6 +122,19 @@ async function checkPasswordGate(plain) {
     return inputHash === sec.passwordHash;
   }
   return plain === sec.password; // fallback
+}
+
+async function checkAdminPassword(plain) {
+  const snap = await getDoc(securityRef);
+  if (!snap.exists()) throw new Error("Firestore: config/security fehlt.");
+
+  const sec = snap.data() || {};
+  if (typeof sec.adminHash !== "string" || sec.adminHash.length === 0) {
+    throw new Error("config/security braucht adminHash (string).");
+  }
+
+  const inputHash = await sha256Hex(plain);
+  return inputHash === sec.adminHash;
 }
 
 async function ensureStateDoc() {
@@ -161,7 +203,6 @@ function downloadJson(filename, obj) {
   URL.revokeObjectURL(url);
 }
 
-// Export
 async function exportBackup() {
   setSaving("📦 Export…");
   try {
@@ -169,11 +210,7 @@ async function exportBackup() {
     const data = snap.data() || { persons: [], events: [], mvpCooldown: 1 };
 
     const backup = {
-      meta: {
-        app: "hellcats-mvp",
-        version: "v4-backup-restore",
-        exportedAt: new Date().toISOString()
-      },
+      meta: { app: "hellcats-mvp", exportedAt: new Date().toISOString() },
       state: {
         persons: Array.isArray(data.persons) ? data.persons : [],
         events: Array.isArray(data.events) ? data.events : [],
@@ -192,13 +229,17 @@ async function exportBackup() {
   }
 }
 
-// Import trigger
 function triggerImport() {
+  if (!isAdmin) {
+    alert("Admin-Mode erforderlich.");
+    return;
+  }
   importFile?.click();
 }
 
-// Import handler
 importFile?.addEventListener("change", async (e) => {
+  if (!isAdmin) return;
+
   const file = e.target.files?.[0];
   if (!file) return;
 
@@ -214,8 +255,6 @@ importFile?.addEventListener("change", async (e) => {
     setSaving("⬆ Import…");
     const text = await file.text();
     const json = JSON.parse(text);
-
-    // support both formats: {state:{...}} or direct {persons,events,mvpCooldown}
     const state = json.state ? json.state : json;
 
     const nextPersons = Array.isArray(state.persons) ? state.persons : [];
@@ -235,8 +274,12 @@ importFile?.addEventListener("change", async (e) => {
   }
 });
 
-// Reset
 async function resetAll() {
+  if (!isAdmin) {
+    alert("Admin-Mode erforderlich.");
+    return;
+  }
+
   const ok = confirm("Wirklich ALLES löschen/resetten? (persons/events werden geleert)");
   if (!ok) return;
 
@@ -251,6 +294,53 @@ async function resetAll() {
     setTimeout(() => setSaving(""), 2000);
   }
 }
+
+/* =========================
+   Admin Overlay + Controls
+   ========================= */
+
+function openAdminOverlay() {
+  setAdminStatus("");
+  if (adminPasswordInput) adminPasswordInput.value = "";
+  if (adminOverlay) adminOverlay.style.display = "grid";
+  adminPasswordInput?.focus();
+}
+
+function closeAdminOverlay() {
+  if (adminOverlay) adminOverlay.style.display = "none";
+}
+
+async function unlockAdmin(pass) {
+  setAdminStatus("Prüfe…");
+  try {
+    const ok = await checkAdminPassword(pass);
+    if (!ok) {
+      setAdminStatus("❌ Falsches Admin-Passwort.");
+      return;
+    }
+
+    isAdmin = true;
+    sessionStorage.setItem("isAdmin", "1");
+    applyAdminUi();
+    setAdminStatus("✅ Admin aktiv.");
+    setTimeout(() => closeAdminOverlay(), 450);
+  } catch (err) {
+    console.error(err);
+    setAdminStatus("⚠️ " + (err?.message || "Fehler"));
+  }
+}
+
+function lockAdmin() {
+  isAdmin = false;
+  sessionStorage.removeItem("isAdmin");
+  applyAdminUi();
+  alert("Admin-Mode deaktiviert.");
+}
+
+adminForm?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await unlockAdmin(adminPasswordInput.value);
+});
 
 // ----- MVP Logik (Storage = Firestore) -----
 function addPerson() {
@@ -412,6 +502,11 @@ window.setCooldown = setCooldown;
 window.exportBackup = exportBackup;
 window.triggerImport = triggerImport;
 window.resetAll = resetAll;
+
+// Admin handlers
+window.openAdminOverlay = openAdminOverlay;
+window.closeAdminOverlay = closeAdminOverlay;
+window.lockAdmin = lockAdmin;
 
 // Optional: Enter adds person
 document.getElementById("newName")?.addEventListener("keydown", (e) => {

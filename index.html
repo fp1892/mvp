@@ -34,6 +34,36 @@
   </div>
 </div>
 
+<!-- ADMIN OVERLAY -->
+<div id="adminOverlay" style="
+  position:fixed; inset:0; display:none; place-items:center;
+  background:rgba(0,0,0,.65); z-index:9998;
+">
+  <div style="
+    width:min(420px, calc(100% - 28px));
+    background:#111; border:1px solid #333; border-radius:12px;
+    padding:18px; color:#fff;
+  ">
+    <h2 style="margin:0 0 8px;">Admin</h2>
+    <p style="margin:0 0 12px; opacity:.85;">Admin-Passwort eingeben.</p>
+
+    <form id="adminForm" style="display:flex; gap:10px;">
+      <input id="adminPasswordInput" type="password" placeholder="Admin-Passwort" required
+        style="flex:1; padding:10px; border-radius:10px; border:1px solid #444; background:#0b0b0b; color:#fff;" />
+      <button type="submit"
+        style="padding:10px 12px; border-radius:10px; border:1px solid #444; background:#1a1a1a; color:#fff; cursor:pointer;">
+        Unlock
+      </button>
+      <button type="button" onclick="closeAdminOverlay()"
+        style="padding:10px 12px; border-radius:10px; border:1px solid #444; background:#1a1a1a; color:#fff; cursor:pointer;">
+        X
+      </button>
+    </form>
+
+    <div id="adminStatus" style="margin-top:10px; min-height:20px; opacity:.9;"></div>
+  </div>
+</div>
+
 <!-- APP -->
 <div id="appRoot" style="display:none;">
   <h1>HELLCATS MVP</h1>
@@ -42,6 +72,7 @@
   <div id="statusBar" style="margin: 8px 0 18px; opacity:.85;">
     <span id="connStatus">🔌 Verbinde…</span>
     <span id="saveStatus" style="margin-left:12px;"></span>
+    <span id="adminBadge" style="margin-left:12px;"></span>
   </div>
 
   <!-- BACKUP / RESTORE -->
@@ -51,17 +82,20 @@
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
       <button onclick="exportBackup()">⬇ Export JSON</button>
 
+      <button onclick="openAdminOverlay()" id="adminUnlockBtn">🔐 Admin Unlock</button>
+      <button onclick="lockAdmin()" id="adminLockBtn" style="display:none;">🔓 Admin Lock</button>
+
       <label style="display:inline-flex; align-items:center; gap:10px;">
         <input id="importFile" type="file" accept="application/json" style="display:none;">
-        <button onclick="triggerImport()">⬆ Import JSON</button>
+        <button onclick="triggerImport()" id="importBtn" disabled>⬆ Import JSON</button>
         <span id="importLabel" style="opacity:.85; font-size:.9rem;"></span>
       </label>
 
-      <button onclick="resetAll()" title="Setzt den gesamten Stand zurück">🗑 Reset (Danger)</button>
+      <button onclick="resetAll()" id="resetBtn" disabled title="Setzt den gesamten Stand zurück">🗑 Reset (Danger)</button>
     </div>
 
     <p style="opacity:.8; margin-top:12px;">
-      Export lädt den aktuellen Stand als JSON herunter. Import überschreibt den aktuellen Stand in Firestore.
+      Export ist immer erlaubt. Import/Reset sind nur im Admin-Mode möglich.
     </p>
   </div>
 
