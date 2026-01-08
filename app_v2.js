@@ -1,18 +1,13 @@
-console.log("APP.JS VERSION", "v1-final-firestore");
+console.log("APP.JS VERSION", "v2-login-firestore");
 
-// 🔥 Firebase CDN (GitHub Pages kompatibel)
+// Firebase via CDN (GitHub Pages kompatibel)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  onSnapshot
+  getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-// 🔐 Firebase Config (DEINS)
+/** Firebase Config (deins) */
 const firebaseConfig = {
   apiKey: "AIzaSyAjWpYMV0xKUVqD2MdhmHdsv-CONgZ8iDM",
   authDomain: "zabini-mvp.firebaseapp.com",
@@ -22,53 +17,88 @@ const firebaseConfig = {
   appId: "1:757946103220:web:d56c1371db8c84aac7eee1"
 };
 
-// Init
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+const db = getFirestore(fbApp);
 
-// 🔑 Anonymes Login
-await signInAnonymously(auth);
+// UI: Login Gate
+const loginOverlay = document.getElementById("loginOverlay");
+const loginForm = document.getElementById("loginForm");
+const passwordInput = document.getElementById("passwordInput");
+const loginStatus = document.getElementById("loginStatus");
+const appRoot = document.getElementById("appRoot");
 
-// 📄 Firestore State
-const stateRef = doc(db, "state", "main");
-
-// Initial anlegen, falls nicht da
-const snap = await getDoc(stateRef);
-if (!snap.exists()) {
-  await setDoc(stateRef, {
-    persons: [],
-    events: [],
-    mvpCooldown: 1
-  });
+function setLoginStatus(msg) {
+  loginStatus.textContent = msg;
 }
 
-// ---------------- STATE ----------------
+function showApp() {
+  loginOverlay.style.display = "none";
+  appRoot.style.display = "block";
+}
+
+// Firestore docs
+const stateRef = doc(db, "state", "main");
+const securityRef = doc(db, "config", "security");
+
+// App state
 let persons = [];
 let events = [];
 let mvpCooldown = 1;
 
 const TITLE_PENALTY = 15;
 
-// 🔁 Live Sync
-onSnapshot(stateRef, (snap) => {
-  const data = snap.data();
-  persons = data.persons || [];
-  events = data.events || [];
-  mvpCooldown = data.mvpCooldown ?? 1;
-  render();
-});
+async function sha256Hex(str) {
+  const enc = new TextEncoder().encode(str);
+  const hashBuf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
 
-// 💾 Save
-async function save() {
-  await updateDoc(stateRef, {
-    persons,
-    events,
-    mvpCooldown
+async function checkPasswordGate(plain) {
+  const snap = await getDoc(securityRef);
+  if (!snap.exists()) throw new Error("Firestore: config/security fehlt.");
+
+  const sec = snap.data() || {};
+  const hasHash = typeof sec.passwordHash === "string" && sec.passwordHash.length > 0;
+  const hasPlain = typeof sec.password === "string" && sec.password.length > 0;
+
+  if (!hasHash && !hasPlain) {
+    throw new Error("config/security braucht passwordHash (empfohlen) oder password.");
+  }
+
+  if (hasHash) {
+    const inputHash = await sha256Hex(plain);
+    return inputHash === sec.passwordHash;
+  }
+  return plain === sec.password; // fallback
+}
+
+async function ensureStateDoc() {
+  const s = await getDoc(stateRef);
+  if (!s.exists()) {
+    await setDoc(stateRef, { persons: [], events: [], mvpCooldown: 1 });
+  }
+}
+
+let unsubscribe = null;
+async function startLiveSync() {
+  await ensureStateDoc();
+
+  if (unsubscribe) unsubscribe();
+  unsubscribe = onSnapshot(stateRef, (snap) => {
+    const data = snap.data() || {};
+    persons = Array.isArray(data.persons) ? data.persons : [];
+    events = Array.isArray(data.events) ? data.events : [];
+    mvpCooldown = typeof data.mvpCooldown === "number" ? data.mvpCooldown : 1;
+    render();
   });
 }
 
-// ---------------- LOGIK ----------------
+async function save() {
+  await updateDoc(stateRef, { persons, events, mvpCooldown });
+}
+
+// ----- Your existing logic (unchanged, nur Storage = Firestore) -----
 function addPerson() {
   const input = document.getElementById("newName");
   const name = input.value.trim();
@@ -90,12 +120,14 @@ function addPerson() {
 
 function toggleTitle(id) {
   const p = persons.find(p => p.id === id);
+  if (!p) return;
   p.title = !p.title;
   save();
 }
 
 function toggleBlocked(id) {
   const p = persons.find(p => p.id === id);
+  if (!p) return;
   p.blocked = !p.blocked;
   save();
 }
@@ -106,6 +138,7 @@ function giveMVP(id) {
   });
 
   const p = persons.find(p => p.id === id);
+  if (!p) return;
   p.mvpCount++;
   p.cooldownLeft = mvpCooldown;
 
@@ -140,7 +173,7 @@ function saveEvent() {
 function calculateMVP() {
   if (events.length === 0) {
     document.getElementById("mvpResult").innerText =
-      "Not enough data";
+      "Not enough data (no events yet)";
     return;
   }
 
@@ -148,13 +181,18 @@ function calculateMVP() {
   let bestScore = -Infinity;
 
   persons.forEach(p => {
-    if (p.blocked || p.cooldownLeft > 0 || !p.placements.length) return;
+    if (p.blocked) return;
+    if (p.cooldownLeft > 0) return;
+    if (!p.placements.length) return;
 
-    const avg =
-      p.placements.reduce((s, x) => s + x.place, 0) /
+    const avgPlace =
+      p.placements.reduce((sum, x) => sum + x.place, 0) /
       p.placements.length;
 
-    let score = (20 - avg) * 3 + (10 - p.mvpCount);
+    let score =
+      (20 - avgPlace) * 3 +
+      (10 - p.mvpCount);
+
     if (p.title) score -= TITLE_PENALTY;
 
     if (score > bestScore) {
@@ -164,7 +202,7 @@ function calculateMVP() {
   });
 
   document.getElementById("mvpResult").innerText =
-    best ? `Next MVP: ${best.name}` : "No eligible MVP";
+    best ? `Next MVP: ${best.name}` : "Not enough eligible persons";
 }
 
 function setCooldown(value) {
@@ -172,11 +210,11 @@ function setCooldown(value) {
   save();
 }
 
-// ---------------- RENDER ----------------
 function render() {
+  const personsBody = document.getElementById("persons");
+  const top10Div = document.getElementById("top10");
   document.getElementById("cooldownInput").value = mvpCooldown;
 
-  const personsBody = document.getElementById("persons");
   personsBody.innerHTML = persons.map(p => {
     const avg = p.placements.length
       ? (
@@ -203,22 +241,19 @@ function render() {
     `;
   }).join("");
 
-  const top10Div = document.getElementById("top10");
   top10Div.innerHTML = "";
   for (let i = 1; i <= 10; i++) {
     top10Div.innerHTML += `
       <label>Place ${i}</label>
       <select id="place${i}">
         <option value="">---</option>
-        ${persons.map(p =>
-          `<option value="${p.id}">${p.name}</option>`
-        ).join("")}
+        ${persons.map(p => `<option value="${p.id}">${p.name}</option>`).join("")}
       </select>
     `;
   }
 }
 
-// 🔓 Expose für HTML onclick
+// Make onclick handlers work (module scope!)
 window.addPerson = addPerson;
 window.toggleTitle = toggleTitle;
 window.toggleBlocked = toggleBlocked;
@@ -227,3 +262,31 @@ window.removePerson = removePerson;
 window.saveEvent = saveEvent;
 window.calculateMVP = calculateMVP;
 window.setCooldown = setCooldown;
+
+// ---- Bootstrap ----
+setLoginStatus("Verbinde…");
+
+// Auth first (needed for Firestore writes)
+await signInAnonymously(auth);
+
+// Wait for password
+setLoginStatus("Bitte Passwort eingeben.");
+
+loginForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setLoginStatus("Prüfe Passwort…");
+
+  try {
+    const ok = await checkPasswordGate(passwordInput.value);
+    if (!ok) {
+      setLoginStatus("❌ Falsches Passwort.");
+      return;
+    }
+    setLoginStatus("✅ OK. Lade Daten…");
+    showApp();
+    await startLiveSync();
+  } catch (err) {
+    console.error(err);
+    setLoginStatus("⚠️ " + (err?.message || "Fehler"));
+  }
+});

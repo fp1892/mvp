@@ -3,55 +3,85 @@
 <head>
   <meta charset="UTF-8" />
   <title>Hellcats MVP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-<h1>HELLCATS MVP</h1>
+<!-- LOGIN OVERLAY -->
+<div id="loginOverlay" style="
+  position:fixed; inset:0; display:grid; place-items:center;
+  background:rgba(0,0,0,.6); z-index:9999;
+">
+  <div style="
+    width:min(420px, calc(100% - 28px));
+    background:#111; border:1px solid #333; border-radius:12px;
+    padding:18px; color:#fff;
+  ">
+    <h2 style="margin:0 0 8px;">Login</h2>
+    <p style="margin:0 0 12px; opacity:.85;">Bitte Passwort eingeben.</p>
 
-<div class="card">
-  <h2>Add Person</h2>
-  <input id="newName" placeholder="Enter name">
-  <button onclick="addPerson()">Add</button>
+    <form id="loginForm" style="display:flex; gap:10px;">
+      <input id="passwordInput" type="password" placeholder="Passwort" required
+        style="flex:1; padding:10px; border-radius:10px; border:1px solid #444; background:#0b0b0b; color:#fff;" />
+      <button type="submit"
+        style="padding:10px 12px; border-radius:10px; border:1px solid #444; background:#1a1a1a; color:#fff; cursor:pointer;">
+        Anmelden
+      </button>
+    </form>
+
+    <div id="loginStatus" style="margin-top:10px; min-height:20px; opacity:.9;"></div>
+  </div>
 </div>
 
-<div class="card">
-  <h2>MVP Settings</h2>
-  <label>MVP Cooldown</label>
-  <input
-    id="cooldownInput"
-    type="number"
-    min="0"
-    onchange="setCooldown(this.value)"
-  >
-</div>
+<!-- APP -->
+<div id="appRoot" style="display:none;">
+  <h1>HELLCATS MVP</h1>
 
-<div class="card">
-  <h2>Persons</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>MVPs</th>
-        <th>Ø Place</th>
-        <th>Cooldown</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody id="persons"></tbody>
-  </table>
-</div>
+  <div class="card">
+    <h2>Add Person</h2>
+    <input id="newName" placeholder="Enter name">
+    <button onclick="addPerson()">Add</button>
+  </div>
 
-<div class="card">
-  <h2>New Event – Top 10</h2>
-  <div id="top10"></div>
-  <button onclick="saveEvent()">Save Event</button>
-</div>
+  <div class="card">
+    <h2>MVP Settings</h2>
+    <label>MVP Cooldown</label>
+    <input
+      id="cooldownInput"
+      type="number"
+      min="0"
+      onchange="setCooldown(this.value)"
+    >
+  </div>
 
-<div class="card">
-  <h2>Next MVP</h2>
-  <button onclick="calculateMVP()">Calculate MVP</button>
-  <div id="mvpResult" class="result"></div>
+  <div class="card">
+    <h2>Persons</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>MVPs</th>
+          <th>Ø Place</th>
+          <th>Cooldown</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="persons"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>New Event – Top 10</h2>
+    <div id="top10"></div>
+    <button onclick="saveEvent()">Save Event</button>
+  </div>
+
+  <div class="card">
+    <h2>Next MVP</h2>
+    <button onclick="calculateMVP()">Calculate MVP</button>
+    <div id="mvpResult" class="result"></div>
+  </div>
 </div>
 
 <script type="module" src="app_v2.js"></script>
