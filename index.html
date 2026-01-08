@@ -92,10 +92,13 @@
       </label>
 
       <button onclick="resetAll()" id="resetBtn" disabled title="Setzt den gesamten Stand zurück">🗑 Reset (Danger)</button>
+
+      <!-- UNDO -->
+      <button onclick="undoLast()" id="undoBtn" disabled title="Stellt den Stand vor dem letzten Import/Reset wieder her">↩ Undo</button>
     </div>
 
     <p style="opacity:.8; margin-top:12px;">
-      Export ist immer erlaubt. Import/Reset sind nur im Admin-Mode möglich.
+      Import/Reset erstellen automatisch einen Undo-Snapshot. Undo ist nur im Admin-Mode möglich.
     </p>
   </div>
 

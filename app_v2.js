@@ -1,4 +1,4 @@
-console.log("APP.JS VERSION", "v5-admin-mode");
+console.log("APP.JS VERSION", "v6-undo-admin");
 
 // Firebase via CDN (GitHub Pages kompatibel)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
@@ -33,11 +33,12 @@ const connStatus = document.getElementById("connStatus");
 const saveStatus = document.getElementById("saveStatus");
 const adminBadge = document.getElementById("adminBadge");
 
-// UI: Import
+// UI: Import/Undo
 const importFile = document.getElementById("importFile");
 const importLabel = document.getElementById("importLabel");
 const importBtn = document.getElementById("importBtn");
 const resetBtn = document.getElementById("resetBtn");
+const undoBtn = document.getElementById("undoBtn");
 
 // UI: Admin overlay
 const adminOverlay = document.getElementById("adminOverlay");
@@ -75,6 +76,7 @@ window.addEventListener("offline", () => setConn("🔴 Offline"));
 
 // Firestore docs
 const stateRef = doc(db, "state", "main");
+const undoRef  = doc(db, "state", "undo");      // <-- Undo-Snapshot
 const securityRef = doc(db, "config", "security");
 
 // App state
@@ -84,13 +86,14 @@ let mvpCooldown = 1;
 
 const TITLE_PENALTY = 15;
 
-// Admin session flag (nur im Browser, kein Firestore)
+// Admin session flag (nur im Browser)
 let isAdmin = sessionStorage.getItem("isAdmin") === "1";
 
 function applyAdminUi() {
   if (adminBadge) adminBadge.textContent = isAdmin ? "🛡 Admin" : "";
   if (importBtn) importBtn.disabled = !isAdmin;
   if (resetBtn) resetBtn.disabled = !isAdmin;
+  if (undoBtn)  undoBtn.disabled  = !isAdmin;
 
   if (adminUnlockBtn) adminUnlockBtn.style.display = isAdmin ? "none" : "inline-block";
   if (adminLockBtn) adminLockBtn.style.display = isAdmin ? "inline-block" : "none";
@@ -167,7 +170,7 @@ async function startLiveSync() {
   );
 }
 
-// Save (mit Debounce + Status)
+// Save (Debounce + Status)
 let saving = false;
 async function save() {
   if (saving) return;
@@ -184,6 +187,64 @@ async function save() {
     setTimeout(() => setSaving(""), 2000);
   } finally {
     saving = false;
+  }
+}
+
+/* =========================
+   UNDO: Snapshot vor Import/Reset
+   ========================= */
+
+async function writeUndoSnapshot(actionLabel) {
+  // holt aktuellen Stand (aus Firestore, nicht aus UI – sicherer)
+  const snap = await getDoc(stateRef);
+  const data = snap.data() || { persons: [], events: [], mvpCooldown: 1 };
+
+  const undoPayload = {
+    meta: {
+      action: actionLabel,
+      savedAt: new Date().toISOString()
+    },
+    state: {
+      persons: Array.isArray(data.persons) ? data.persons : [],
+      events: Array.isArray(data.events) ? data.events : [],
+      mvpCooldown: typeof data.mvpCooldown === "number" ? data.mvpCooldown : 1
+    }
+  };
+
+  await setDoc(undoRef, undoPayload);
+}
+
+async function undoLast() {
+  if (!isAdmin) {
+    alert("Admin-Mode erforderlich.");
+    return;
+  }
+
+  const snap = await getDoc(undoRef);
+  if (!snap.exists()) {
+    alert("Kein Undo-Snapshot vorhanden (noch kein Import/Reset gemacht).");
+    return;
+  }
+
+  const ok = confirm("Undo stellt den Stand vor dem letzten Import/Reset wieder her. Fortfahren?");
+  if (!ok) return;
+
+  try {
+    setSaving("↩ Undo…");
+    const data = snap.data() || {};
+    const st = data.state || {};
+
+    const nextPersons = Array.isArray(st.persons) ? st.persons : [];
+    const nextEvents  = Array.isArray(st.events) ? st.events : [];
+    const nextCooldown = typeof st.mvpCooldown === "number" ? st.mvpCooldown : 1;
+
+    await setDoc(stateRef, { persons: nextPersons, events: nextEvents, mvpCooldown: nextCooldown });
+    setSaving("✅ Undo fertig");
+    setTimeout(() => setSaving(""), 1200);
+  } catch (err) {
+    console.error(err);
+    setSaving("⚠️ Undo fehlgeschlagen");
+    setTimeout(() => setSaving(""), 2000);
   }
 }
 
@@ -245,26 +306,28 @@ importFile?.addEventListener("change", async (e) => {
 
   importLabel.textContent = file.name;
 
-  const ok = confirm("Import überschreibt den aktuellen Stand in Firestore. Fortfahren?");
+  const ok = confirm("Import überschreibt den aktuellen Stand in Firestore. (Undo wird automatisch erstellt) Fortfahren?");
   if (!ok) {
     importFile.value = "";
     return;
   }
 
   try {
-    setSaving("⬆ Import…");
+    setSaving("⬆ Import… (Undo sichern)");
+    await writeUndoSnapshot("import");
+
     const text = await file.text();
     const json = JSON.parse(text);
     const state = json.state ? json.state : json;
 
     const nextPersons = Array.isArray(state.persons) ? state.persons : [];
-    const nextEvents = Array.isArray(state.events) ? state.events : [];
+    const nextEvents  = Array.isArray(state.events) ? state.events : [];
     const nextCooldown = typeof state.mvpCooldown === "number" ? state.mvpCooldown : 1;
 
     await setDoc(stateRef, { persons: nextPersons, events: nextEvents, mvpCooldown: nextCooldown });
 
-    setSaving("✅ Import fertig");
-    setTimeout(() => setSaving(""), 1200);
+    setSaving("✅ Import fertig (Undo bereit)");
+    setTimeout(() => setSaving(""), 1500);
 
     importFile.value = "";
   } catch (err) {
@@ -280,14 +343,17 @@ async function resetAll() {
     return;
   }
 
-  const ok = confirm("Wirklich ALLES löschen/resetten? (persons/events werden geleert)");
+  const ok = confirm("Wirklich ALLES resetten? (Undo wird automatisch erstellt)");
   if (!ok) return;
 
   try {
-    setSaving("🗑 Reset…");
+    setSaving("🗑 Reset… (Undo sichern)");
+    await writeUndoSnapshot("reset");
+
     await setDoc(stateRef, { persons: [], events: [], mvpCooldown: 1 });
-    setSaving("✅ Reset fertig");
-    setTimeout(() => setSaving(""), 1200);
+
+    setSaving("✅ Reset fertig (Undo bereit)");
+    setTimeout(() => setSaving(""), 1500);
   } catch (err) {
     console.error(err);
     setSaving("⚠️ Reset fehlgeschlagen");
@@ -342,7 +408,10 @@ adminForm?.addEventListener("submit", async (e) => {
   await unlockAdmin(adminPasswordInput.value);
 });
 
-// ----- MVP Logik (Storage = Firestore) -----
+/* =========================
+   MVP Logik (Storage = Firestore)
+   ========================= */
+
 function addPerson() {
   const input = document.getElementById("newName");
   const name = input.value.trim();
@@ -502,6 +571,9 @@ window.setCooldown = setCooldown;
 window.exportBackup = exportBackup;
 window.triggerImport = triggerImport;
 window.resetAll = resetAll;
+
+// Undo handler
+window.undoLast = undoLast;
 
 // Admin handlers
 window.openAdminOverlay = openAdminOverlay;
