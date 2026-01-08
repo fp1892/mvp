@@ -105,3 +105,40 @@ tr:hover {
   color: var(--gold-soft);
   font-weight: bold;
 }
+
+/* ===== Option B: UI Polish (Login + Status) ===== */
+
+/* Login Overlay (passend zum Gold/Dark Theme) */
+#loginOverlay {
+  backdrop-filter: blur(6px);
+}
+
+#loginOverlay h2 {
+  color: var(--gold);
+}
+
+#loginOverlay p {
+  color: var(--text);
+}
+
+/* Status Bar */
+#statusBar {
+  text-align: center;
+  font-size: 0.95rem;
+}
+
+#connStatus {
+  color: var(--gold-soft);
+}
+
+#saveStatus {
+  color: var(--gold);
+}
+
+/* Disabled Buttons (z.B. beim Speichern) */
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}

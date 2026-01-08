@@ -1,4 +1,4 @@
-console.log("APP.JS VERSION", "v2-login-firestore");
+console.log("APP.JS VERSION", "v3-ux-login-firestore");
 
 // Firebase via CDN (GitHub Pages kompatibel)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
@@ -28,14 +28,31 @@ const passwordInput = document.getElementById("passwordInput");
 const loginStatus = document.getElementById("loginStatus");
 const appRoot = document.getElementById("appRoot");
 
+// UI: Status Bar
+const connStatus = document.getElementById("connStatus");
+const saveStatus = document.getElementById("saveStatus");
+
 function setLoginStatus(msg) {
-  loginStatus.textContent = msg;
+  if (loginStatus) loginStatus.textContent = msg;
 }
 
 function showApp() {
-  loginOverlay.style.display = "none";
-  appRoot.style.display = "block";
+  if (loginOverlay) loginOverlay.style.display = "none";
+  if (appRoot) appRoot.style.display = "block";
 }
+
+function setConn(text) {
+  if (connStatus) connStatus.textContent = text;
+}
+
+function setSaving(msg) {
+  if (!saveStatus) return;
+  saveStatus.textContent = msg || "";
+}
+
+// Online/Offline events
+window.addEventListener("online", () => setConn("🟢 Online"));
+window.addEventListener("offline", () => setConn("🔴 Offline"));
 
 // Firestore docs
 const stateRef = doc(db, "state", "main");
@@ -48,6 +65,7 @@ let mvpCooldown = 1;
 
 const TITLE_PENALTY = 15;
 
+// Hash helper
 async function sha256Hex(str) {
   const enc = new TextEncoder().encode(str);
   const hashBuf = await crypto.subtle.digest("SHA-256", enc);
@@ -85,20 +103,45 @@ async function startLiveSync() {
   await ensureStateDoc();
 
   if (unsubscribe) unsubscribe();
-  unsubscribe = onSnapshot(stateRef, (snap) => {
-    const data = snap.data() || {};
-    persons = Array.isArray(data.persons) ? data.persons : [];
-    events = Array.isArray(data.events) ? data.events : [];
-    mvpCooldown = typeof data.mvpCooldown === "number" ? data.mvpCooldown : 1;
-    render();
-  });
+
+  unsubscribe = onSnapshot(
+    stateRef,
+    (snap) => {
+      setConn(navigator.onLine ? "🟢 Online" : "🔴 Offline");
+      const data = snap.data() || {};
+      persons = Array.isArray(data.persons) ? data.persons : [];
+      events = Array.isArray(data.events) ? data.events : [];
+      mvpCooldown = typeof data.mvpCooldown === "number" ? data.mvpCooldown : 1;
+      render();
+    },
+    (err) => {
+      console.error(err);
+      setConn("🔴 Sync-Fehler");
+    }
+  );
 }
 
+// Save (mit Debounce + Status)
+let saving = false;
 async function save() {
-  await updateDoc(stateRef, { persons, events, mvpCooldown });
+  if (saving) return;
+  saving = true;
+  setSaving("💾 Speichert…");
+
+  try {
+    await updateDoc(stateRef, { persons, events, mvpCooldown });
+    setSaving("✅ Gespeichert");
+    setTimeout(() => setSaving(""), 900);
+  } catch (err) {
+    console.error(err);
+    setSaving("⚠️ Speichern fehlgeschlagen");
+    setTimeout(() => setSaving(""), 2000);
+  } finally {
+    saving = false;
+  }
 }
 
-// ----- Your existing logic (unchanged, nur Storage = Firestore) -----
+// ----- Deine Logik (Storage = Firestore) -----
 function addPerson() {
   const input = document.getElementById("newName");
   const name = input.value.trim();
@@ -172,8 +215,7 @@ function saveEvent() {
 
 function calculateMVP() {
   if (events.length === 0) {
-    document.getElementById("mvpResult").innerText =
-      "Not enough data (no events yet)";
+    document.getElementById("mvpResult").innerText = "Not enough data (no events yet)";
     return;
   }
 
@@ -189,10 +231,7 @@ function calculateMVP() {
       p.placements.reduce((sum, x) => sum + x.place, 0) /
       p.placements.length;
 
-    let score =
-      (20 - avgPlace) * 3 +
-      (10 - p.mvpCount);
-
+    let score = (20 - avgPlace) * 3 + (10 - p.mvpCount);
     if (p.title) score -= TITLE_PENALTY;
 
     if (score > bestScore) {
@@ -217,10 +256,7 @@ function render() {
 
   personsBody.innerHTML = persons.map(p => {
     const avg = p.placements.length
-      ? (
-          p.placements.reduce((s, x) => s + x.place, 0) /
-          p.placements.length
-        ).toFixed(2)
+      ? (p.placements.reduce((s, x) => s + x.place, 0) / p.placements.length).toFixed(2)
       : "-";
 
     return `
@@ -231,9 +267,7 @@ function render() {
         <td>${p.cooldownLeft}</td>
         <td>
           <button onclick="toggleTitle('${p.id}')">Title</button>
-          <button onclick="toggleBlocked('${p.id}')">
-            ${p.blocked ? "Unblock" : "Block"}
-          </button>
+          <button onclick="toggleBlocked('${p.id}')">${p.blocked ? "Unblock" : "Block"}</button>
           <button onclick="giveMVP('${p.id}')">MVP</button>
           <button onclick="removePerson('${p.id}')">✕</button>
         </td>
@@ -253,7 +287,7 @@ function render() {
   }
 }
 
-// Make onclick handlers work (module scope!)
+// onclick handlers (module scope)
 window.addPerson = addPerson;
 window.toggleTitle = toggleTitle;
 window.toggleBlocked = toggleBlocked;
@@ -263,7 +297,16 @@ window.saveEvent = saveEvent;
 window.calculateMVP = calculateMVP;
 window.setCooldown = setCooldown;
 
+// Optional: Enter adds person
+document.getElementById("newName")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    addPerson();
+  }
+});
+
 // ---- Bootstrap ----
+setConn(navigator.onLine ? "🟢 Online" : "🔴 Offline");
 setLoginStatus("Verbinde…");
 
 // Auth first (needed for Firestore writes)
@@ -282,6 +325,7 @@ loginForm.addEventListener("submit", async (e) => {
       setLoginStatus("❌ Falsches Passwort.");
       return;
     }
+
     setLoginStatus("✅ OK. Lade Daten…");
     showApp();
     await startLiveSync();
