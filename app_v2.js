@@ -1,4 +1,4 @@
-console.log("APP.JS VERSION", "v3-ux-login-firestore");
+console.log("APP.JS VERSION", "v4-backup-restore");
 
 // Firebase via CDN (GitHub Pages kompatibel)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
@@ -31,6 +31,10 @@ const appRoot = document.getElementById("appRoot");
 // UI: Status Bar
 const connStatus = document.getElementById("connStatus");
 const saveStatus = document.getElementById("saveStatus");
+
+// UI: Import label / file
+const importFile = document.getElementById("importFile");
+const importLabel = document.getElementById("importLabel");
 
 function setLoginStatus(msg) {
   if (loginStatus) loginStatus.textContent = msg;
@@ -141,7 +145,114 @@ async function save() {
   }
 }
 
-// ----- Deine Logik (Storage = Firestore) -----
+/* =========================
+   Backup / Restore / Reset
+   ========================= */
+
+function downloadJson(filename, obj) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Export
+async function exportBackup() {
+  setSaving("📦 Export…");
+  try {
+    const snap = await getDoc(stateRef);
+    const data = snap.data() || { persons: [], events: [], mvpCooldown: 1 };
+
+    const backup = {
+      meta: {
+        app: "hellcats-mvp",
+        version: "v4-backup-restore",
+        exportedAt: new Date().toISOString()
+      },
+      state: {
+        persons: Array.isArray(data.persons) ? data.persons : [],
+        events: Array.isArray(data.events) ? data.events : [],
+        mvpCooldown: typeof data.mvpCooldown === "number" ? data.mvpCooldown : 1
+      }
+    };
+
+    const fname = `hellcats-backup-${new Date().toISOString().slice(0,10)}.json`;
+    downloadJson(fname, backup);
+    setSaving("✅ Export fertig");
+    setTimeout(() => setSaving(""), 1200);
+  } catch (err) {
+    console.error(err);
+    setSaving("⚠️ Export fehlgeschlagen");
+    setTimeout(() => setSaving(""), 2000);
+  }
+}
+
+// Import trigger
+function triggerImport() {
+  importFile?.click();
+}
+
+// Import handler
+importFile?.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  importLabel.textContent = file.name;
+
+  const ok = confirm("Import überschreibt den aktuellen Stand in Firestore. Fortfahren?");
+  if (!ok) {
+    importFile.value = "";
+    return;
+  }
+
+  try {
+    setSaving("⬆ Import…");
+    const text = await file.text();
+    const json = JSON.parse(text);
+
+    // support both formats: {state:{...}} or direct {persons,events,mvpCooldown}
+    const state = json.state ? json.state : json;
+
+    const nextPersons = Array.isArray(state.persons) ? state.persons : [];
+    const nextEvents = Array.isArray(state.events) ? state.events : [];
+    const nextCooldown = typeof state.mvpCooldown === "number" ? state.mvpCooldown : 1;
+
+    await setDoc(stateRef, { persons: nextPersons, events: nextEvents, mvpCooldown: nextCooldown });
+
+    setSaving("✅ Import fertig");
+    setTimeout(() => setSaving(""), 1200);
+
+    importFile.value = "";
+  } catch (err) {
+    console.error(err);
+    setSaving("⚠️ Import fehlgeschlagen");
+    setTimeout(() => setSaving(""), 2000);
+  }
+});
+
+// Reset
+async function resetAll() {
+  const ok = confirm("Wirklich ALLES löschen/resetten? (persons/events werden geleert)");
+  if (!ok) return;
+
+  try {
+    setSaving("🗑 Reset…");
+    await setDoc(stateRef, { persons: [], events: [], mvpCooldown: 1 });
+    setSaving("✅ Reset fertig");
+    setTimeout(() => setSaving(""), 1200);
+  } catch (err) {
+    console.error(err);
+    setSaving("⚠️ Reset fehlgeschlagen");
+    setTimeout(() => setSaving(""), 2000);
+  }
+}
+
+// ----- MVP Logik (Storage = Firestore) -----
 function addPerson() {
   const input = document.getElementById("newName");
   const name = input.value.trim();
@@ -296,6 +407,11 @@ window.removePerson = removePerson;
 window.saveEvent = saveEvent;
 window.calculateMVP = calculateMVP;
 window.setCooldown = setCooldown;
+
+// Backup handlers
+window.exportBackup = exportBackup;
+window.triggerImport = triggerImport;
+window.resetAll = resetAll;
 
 // Optional: Enter adds person
 document.getElementById("newName")?.addEventListener("keydown", (e) => {
